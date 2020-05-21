@@ -15,6 +15,7 @@ namespace BuddiesBot
     class Program
     {
         private const long DotA2Channel2Id = 661420230362529812;
+        private const string BotToken = "NzExODQ0MTk2NDM2NDEwMzg4.XsaA2w.emKzGaV_dF6O89dAWmeJOzyUXZk";
 
         private static DiscordSocketClient DiscordSocketClient;
         private static IAudioClient AudioClient;
@@ -29,7 +30,7 @@ namespace BuddiesBot
             DiscordSocketClient.MessageReceived += MessageReceivedAsync;
             //DiscordSocketClient.UserVoiceStateUpdated += UserVoiceStateUpdatedAsync;
 
-            await DiscordSocketClient.LoginAsync(TokenType.Bot, "NzExODQ0MTk2NDM2NDEwMzg4.XsI7bw.oko3xfEvJmiGcvpV0UwNuyv7jIM");
+            await DiscordSocketClient.LoginAsync(TokenType.Bot, BotToken);
             await DiscordSocketClient.StartAsync();
 
             await Task.Delay(Timeout.Infinite);

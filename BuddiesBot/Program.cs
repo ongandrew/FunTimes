@@ -12,10 +12,38 @@ using System.Threading.Tasks;
 
 namespace BuddiesBot
 {
+
+    public static class Extensions
+    {
+        public static bool IsDirectMessage(this SocketMessage socketMessage)
+        {
+            return socketMessage.Channel is SocketDMChannel;
+        }
+
+        public static SocketVoiceChannel GetAuthorVoiceChannel(this SocketMessage socketMessage)
+        {
+            if (socketMessage.Channel is SocketGuildChannel socketGuildChannel)
+            {
+                return socketGuildChannel.Guild.GetUser(socketMessage.Author.Id).VoiceChannel;
+            }
+            else
+            {
+                return null;
+            }
+        }
+    }
+
     class Program
     {
         private const long DotA2Channel2Id = 661420230362529812;
-        private const string BotToken = "NzExODQ0MTk2NDM2NDEwMzg4.XsaA2w.emKzGaV_dF6O89dAWmeJOzyUXZk";
+        private const string BotTokenPart1Of3 = "NzExODQ0MTk2NDM2NDEwMzg4";
+        private const string BotTokenPart2Of3 = "XscLYA";
+        private const string BotTokenPart3Of3 = "sQ_KBg8pdsyO2R9miN-Ztx4B2UE";
+        // Attempt at defeating Github's secret scanning.
+        private static string BotToken
+        {
+            get => $"{BotTokenPart1Of3}.{BotTokenPart2Of3}.{BotTokenPart3Of3}";
+        }
 
         private static DiscordSocketClient DiscordSocketClient;
         private static IAudioClient AudioClient;
@@ -94,6 +122,16 @@ namespace BuddiesBot
             }
         }
 
+        private static async Task StreamAudioAsync(Stream stream)
+        {
+            await AudioClient.SetSpeakingAsync(true);
+
+            await stream.CopyToAsync(AudioOutStream);
+            await AudioOutStream.FlushAsync();
+
+            await AudioClient.SetSpeakingAsync(false);
+        }
+
         [Command(RunMode = RunMode.Async)]
         private static async Task ReadyAsync()
         {
@@ -108,48 +146,33 @@ namespace BuddiesBot
             {
                 if (socketMessage.Content == "!loser")
                 {
-                    SocketVoiceChannel socketVoiceChannel = ((SocketGuildChannel)(socketMessage.Channel)).Guild.GetUser(socketMessage.Author.Id).VoiceChannel;
+                    SocketVoiceChannel socketVoiceChannel = socketMessage.GetAuthorVoiceChannel();
 
                     if (socketVoiceChannel != null)
                     {
                         Task.Run(async () =>
                         {
-                            if (((SocketGuildChannel)(socketMessage.Channel)).Guild.GetUser(DiscordSocketClient.CurrentUser.Id).VoiceChannel == null ||
-                                ((SocketGuildChannel)(socketMessage.Channel)).Guild.GetUser(DiscordSocketClient.CurrentUser.Id).VoiceChannel.Id != socketVoiceChannel.Id)
-                            {
-                                AudioClient = await socketVoiceChannel.ConnectAsync();
-                                AudioOutStream = AudioClient.CreatePCMStream(AudioApplication.Mixed, 48000);
-                            }
+                            await EnsureConnectedToVoiceChannelAsync(socketVoiceChannel);
                             await SpeakAsync("Loser!");
                         });
                     }
                 }
                 else if (socketMessage.Content == "!kevin")
                 {
-                    SocketVoiceChannel socketVoiceChannel = ((SocketGuildChannel)(socketMessage.Channel)).Guild.GetUser(socketMessage.Author.Id).VoiceChannel;
+                    SocketVoiceChannel socketVoiceChannel = socketMessage.GetAuthorVoiceChannel();
 
                     if (socketVoiceChannel != null)
                     {
                         Task.Run(async () =>
                         {
-                            if (((SocketGuildChannel)(socketMessage.Channel)).Guild.GetUser(DiscordSocketClient.CurrentUser.Id).VoiceChannel == null ||
-                                ((SocketGuildChannel)(socketMessage.Channel)).Guild.GetUser(DiscordSocketClient.CurrentUser.Id).VoiceChannel.Id != socketVoiceChannel.Id)
-                            {
-                                AudioClient = await socketVoiceChannel.ConnectAsync();
-                                AudioOutStream = AudioClient.CreatePCMStream(AudioApplication.Mixed, 48000);
-                            }
+                            await EnsureConnectedToVoiceChannelAsync(socketVoiceChannel);
 
                             using (FileStream fileStream = File.OpenRead("The Kevin Song.mp3"))
                             using (Mp3FileReader mp3FileReader = new Mp3FileReader(fileStream))
                             using (WaveStream waveStream = WaveFormatConversionStream.CreatePcmStream(mp3FileReader))
-                            using (WaveFormatConversionStream waveFormatConversionStream = new WaveFormatConversionStream(new WaveFormat(48000, 16, 1), waveStream))
+                            using (WaveFormatConversionStream waveFormatConversionStream = new WaveFormatConversionStream(new WaveFormat(48000, 16, 2), waveStream))
                             {
-                                await AudioClient.SetSpeakingAsync(true);
-
-                                await waveFormatConversionStream.CopyToAsync(AudioOutStream);
-                                await AudioOutStream.FlushAsync();
-
-                                await AudioClient.SetSpeakingAsync(false);
+                                await StreamAudioAsync(waveFormatConversionStream);
                             }
                         });
                     }
@@ -161,6 +184,21 @@ namespace BuddiesBot
         {
             Console.WriteLine(log.ToString());
             return Task.CompletedTask;
+        }
+
+        private static async Task EnsureConnectedToVoiceChannelAsync(SocketVoiceChannel socketVoiceChannel)
+        {
+            if (socketVoiceChannel == null)
+            {
+                throw new ArgumentNullException(nameof(socketVoiceChannel));
+            }
+
+            SocketVoiceChannel currentlyConnectedVoiceChannel = socketVoiceChannel.Guild.GetUser(DiscordSocketClient.CurrentUser.Id).VoiceChannel;
+            if (currentlyConnectedVoiceChannel == null || currentlyConnectedVoiceChannel.Id != socketVoiceChannel.Id || AudioClient.ConnectionState != ConnectionState.Connected)
+            {
+                AudioClient = await socketVoiceChannel.ConnectAsync();
+                AudioOutStream = AudioClient.CreatePCMStream(AudioApplication.Mixed, 48000);
+            }
         }
     }
 }

@@ -5,10 +5,12 @@ using Discord.WebSocket;
 using NAudio.Wave;
 using System;
 using System.IO;
+using System.Linq;
 using System.Speech.AudioFormat;
 using System.Speech.Synthesis;
 using System.Threading;
 using System.Threading.Tasks;
+using Universal.Common.Extensions;
 
 namespace BuddiesBot
 {
@@ -176,7 +178,60 @@ namespace BuddiesBot
                             }
                         });
                     }
-                } 
+                }
+                else if (socketMessage.Content == "!josh")
+                {
+                    SocketVoiceChannel socketVoiceChannel = socketMessage.GetAuthorVoiceChannel();
+
+                    if (socketVoiceChannel != null)
+                    {
+                        Task.Run(async () =>
+                        {
+                            await EnsureConnectedToVoiceChannelAsync(socketVoiceChannel);
+
+                            using (FileStream fileStream = File.OpenRead("The Josh Song.mp3"))
+                            using (Mp3FileReader mp3FileReader = new Mp3FileReader(fileStream))
+                            using (WaveStream waveStream = WaveFormatConversionStream.CreatePcmStream(mp3FileReader))
+                            using (WaveFormatConversionStream waveFormatConversionStream = new WaveFormatConversionStream(new WaveFormat(48000, 16, 2), waveStream))
+                            {
+                                await StreamAudioAsync(waveFormatConversionStream);
+                            }
+                        });
+                    }
+                }
+                else if (socketMessage.Content.StartsWith("!play"))
+                {
+                    string songName = socketMessage.Content.Replace("!play", string.Empty).Trim();
+
+                    if (!songName.IsNullOrEmpty() && Path.GetExtension(songName).Equals(".mp3", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        foreach (string file in Directory.GetFiles(".").Select(x => Path.GetFileName(x)))
+                        {
+                            if (file.Equals(songName, StringComparison.InvariantCultureIgnoreCase))
+                            {
+                                SocketVoiceChannel socketVoiceChannel = socketMessage.GetAuthorVoiceChannel();
+
+                                if (socketVoiceChannel != null)
+                                {
+                                    Task.Run(async () =>
+                                    {
+                                        await EnsureConnectedToVoiceChannelAsync(socketVoiceChannel);
+
+                                        using (FileStream fileStream = File.OpenRead(file))
+                                        using (Mp3FileReader mp3FileReader = new Mp3FileReader(fileStream))
+                                        using (WaveStream waveStream = WaveFormatConversionStream.CreatePcmStream(mp3FileReader))
+                                        using (WaveFormatConversionStream waveFormatConversionStream = new WaveFormatConversionStream(new WaveFormat(48000, 16, 2), waveStream))
+                                        {
+                                            await StreamAudioAsync(waveFormatConversionStream);
+                                        }
+                                    });
+                                }
+
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -194,7 +249,7 @@ namespace BuddiesBot
             }
 
             SocketVoiceChannel currentlyConnectedVoiceChannel = socketVoiceChannel.Guild.GetUser(DiscordSocketClient.CurrentUser.Id).VoiceChannel;
-            if (currentlyConnectedVoiceChannel == null || currentlyConnectedVoiceChannel.Id != socketVoiceChannel.Id || AudioClient.ConnectionState != ConnectionState.Connected)
+            if (currentlyConnectedVoiceChannel == null || currentlyConnectedVoiceChannel.Id != socketVoiceChannel.Id || AudioClient == null || AudioClient.ConnectionState != ConnectionState.Connected)
             {
                 AudioClient = await socketVoiceChannel.ConnectAsync();
                 AudioOutStream = AudioClient.CreatePCMStream(AudioApplication.Mixed, 48000);
